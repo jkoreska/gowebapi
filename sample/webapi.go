@@ -9,7 +9,7 @@ import (
 
 func main() {
 
-	testController := &controllers.TestController{}
+	testController := controllers.NewTestController()
 
 	handler := gowebapi.NewDefaultHandler()
 

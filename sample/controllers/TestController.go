@@ -1,14 +1,18 @@
 package controllers
 
 import (
-	"code.luktek.com/git/gowebapi"
+	"github.com/jkoreska/gowebapi"
 )
 
-type TestController struct {
+type testController struct {
 	testme int64
 }
 
-func (self *TestController) TestRequest(request *gowebapi.Request) *gowebapi.Response {
+func NewTestController() *testController {
+	return &testController{}
+}
+
+func (self *testController) TestRequest(request *gowebapi.Request) *gowebapi.Response {
 
 	self.testme++
 
@@ -21,7 +25,7 @@ func (self *TestController) TestRequest(request *gowebapi.Request) *gowebapi.Res
 	}
 }
 
-func (self *TestController) TestModel(id int, model *TestModel) *gowebapi.Response {
+func (self *testController) TestModel(id int, model *TestModel) *gowebapi.Response {
 
 	self.testme++
 	model.Id = self.testme
@@ -37,28 +41,28 @@ type TestModel struct {
 	Tester interface{}
 }
 
-func (self *TestController) Get(id int64, test string) *gowebapi.Response {
+func (self *testController) Get(id int64, test string) *gowebapi.Response {
 	return &gowebapi.Response{
 		Status: 200,
 		Data:   &TestModel{Id: id, Tester: test},
 	}
 }
 
-func (self *TestController) Post(model *TestModel) *gowebapi.Response {
+func (self *testController) Post(model *TestModel) *gowebapi.Response {
 	return &gowebapi.Response{
 		Status: 201,
 		Data:   model,
 	}
 }
 
-func (self *TestController) Put(id int64, model *TestModel) *gowebapi.Response {
+func (self *testController) Put(id int64, model *TestModel) *gowebapi.Response {
 	return &gowebapi.Response{
 		Status: 202,
 		Data:   model,
 	}
 }
 
-func (self *TestController) Delete(id int64) *gowebapi.Response {
+func (self *testController) Delete(id int64) *gowebapi.Response {
 	return &gowebapi.Response{
 		Status: 210,
 	}

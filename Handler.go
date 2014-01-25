@@ -67,7 +67,7 @@ func (self *DefaultHandler) handleRequest(httpRequest *http.Request) *Response {
 
 	if "" == responseFormat {
 		return &Response{
-			Status: 415,
+			Status: 406,
 			Data:   "Response format not supported",
 		}
 	}
@@ -187,6 +187,7 @@ func (self *DefaultHandler) determineResponseFormat(header http.Header) string {
 	if accept := header.Get("accept"); "" != accept && "*/*" != accept {
 		accepts := strings.Split(accept, ",")
 		for _, accept = range accepts {
+			
 			accept = strings.Trim(accept, " ")
 			if _, exists := self.responseFormatters[accept]; exists {
 				mimeType = accept

@@ -35,8 +35,7 @@ func (self *DefaultBinder) bindWithReflect(request *Request) (*Response, error) 
 
 	if reflect.Ptr == target.Kind() && reflect.Struct == target.Elem().Kind() {
 
-		controller := reflect.New(target.Type().Elem()) // what about dependency injection?
-		target = controller.MethodByName(request.Route.Action)
+		target = target.MethodByName(request.Route.Action)
 		// handle invalid action
 	}
 

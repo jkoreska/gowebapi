@@ -36,13 +36,13 @@ func (self *Route) ToFunc(target interface{}) *Route {
 
 	if reflect.Func != targetType.Kind() {
 
-		//panic("Invalid target type (expecting func)")
-		return self
+		panic("Invalid target type (expecting func)")
+		//return self
 
 	} else if 1 != targetType.NumOut() || "*gowebapi.Response" != targetType.Out(0).String() {
 
-		//panic("Invalid target return value (expecting *gowebapi.Response)")
-		return self
+		panic("Invalid target return value (expecting *gowebapi.Response)")
+		//return self
 	}
 
 	self.Target = target
@@ -57,23 +57,23 @@ func (self *Route) ToMethod(target interface{}, action string) *Route {
 	if reflect.Ptr != targetType.Kind() ||
 		reflect.Struct != targetType.Elem().Kind() {
 
-		//panic("Invalid target type (expecting struct ptr)")
-		return self
+		panic("Invalid target type (expecting struct ptr)")
+		//return self
 	}
 
 	method, methodExists := targetType.MethodByName(action)
 
 	if !methodExists {
 
-		//panic("Invalid target method (method doesn't exist)")
-		return self
+		panic("Invalid target method (method doesn't exist)")
+		//return self
 	}
 
 	if 1 != method.Type.NumOut() ||
 		"*gowebapi.Response" != method.Type.Out(0).String() {
 
-		//panic("Invalid target return value (expecting *gowebapi.Response)")
-		return self
+		panic("Invalid target return value (expecting *gowebapi.Response)")
+		//return self
 	}
 
 	self.Target = target
