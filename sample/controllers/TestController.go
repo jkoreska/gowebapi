@@ -6,10 +6,11 @@ import (
 
 type testController struct {
 	testme int64
+	auther gowebapi.Auther
 }
 
-func NewTestController() *testController {
-	return &testController{}
+func NewTestController(auther gowebapi.Auther) *testController {
+	return &testController{0, auther}
 }
 
 func (self *testController) TestRequest(request *gowebapi.Request) *gowebapi.Response {
@@ -25,20 +26,47 @@ func (self *testController) TestRequest(request *gowebapi.Request) *gowebapi.Res
 	}
 }
 
-func (self *testController) TestModel(id int, model *TestModel) *gowebapi.Response {
+type AuthModel struct {
+	Email string
+	Secret string
+}
 
-	self.testme++
-	model.Id = self.testme
+func (self *testController) Authenticate(model *AuthModel, request *gowebapi.Request) *gowebapi.Response {
+
+	if "test@test.com" == model.Email && "123123" == model.Secret {
+
+		token := self.auther.Signin("test@test.com")
+
+		return &gowebapi.Response{
+			Status: 200,
+			Data: struct{Token string}{
+				Token: token,
+			},
+		}
+	}
 
 	return &gowebapi.Response{
-		Status: 201,
-		Data:   model,
+		Status: 401,
+		Header: map[string][]string{"Www-Authenticate": []string{"Basic"}},
 	}
 }
 
 type TestModel struct {
 	Id     int64
 	Tester interface{}
+	User   string
+}
+
+func (self *testController) TestModel(id int, model *TestModel, request *gowebapi.Request) *gowebapi.Response {
+
+	self.testme++
+	model.Id = self.testme
+	model.User = request.UserData
+
+	return &gowebapi.Response{
+		Status: 200,
+		Data:   model,
+	}
 }
 
 func (self *testController) Get(id int64, test string) *gowebapi.Response {

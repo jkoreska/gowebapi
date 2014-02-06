@@ -44,7 +44,7 @@ func (self *DefaultRouter) AddRoute(path string) *Route {
 	}
 
 	return self.addRoute(
-		&Route{Path: regexp.MustCompile(path), Params: map[string]string{}},
+		&Route{Path: regexp.MustCompile(path), Params: map[string]string{}, Filter:&Filter{}},
 	)
 }
 

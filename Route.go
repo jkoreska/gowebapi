@@ -13,7 +13,7 @@ type Route struct {
 	Target  interface{}
 	Action  string
 	Binder
-	Authorize string
+	Filter *Filter
 }
 
 func (self *Route) ForMethod(method string) *Route {
@@ -37,12 +37,10 @@ func (self *Route) ToFunc(target interface{}) *Route {
 	if reflect.Func != targetType.Kind() {
 
 		panic("Invalid target type (expecting func)")
-		//return self
 
 	} else if 1 != targetType.NumOut() || "*gowebapi.Response" != targetType.Out(0).String() {
-
+		
 		panic("Invalid target return value (expecting *gowebapi.Response)")
-		//return self
 	}
 
 	self.Target = target
@@ -58,7 +56,6 @@ func (self *Route) ToMethod(target interface{}, action string) *Route {
 		reflect.Struct != targetType.Elem().Kind() {
 
 		panic("Invalid target type (expecting struct ptr)")
-		//return self
 	}
 
 	method, methodExists := targetType.MethodByName(action)
@@ -66,14 +63,12 @@ func (self *Route) ToMethod(target interface{}, action string) *Route {
 	if !methodExists {
 
 		panic("Invalid target method (method doesn't exist)")
-		//return self
 	}
 
 	if 1 != method.Type.NumOut() ||
 		"*gowebapi.Response" != method.Type.Out(0).String() {
 
 		panic("Invalid target return value (expecting *gowebapi.Response)")
-		//return self
 	}
 
 	self.Target = target
@@ -82,11 +77,9 @@ func (self *Route) ToMethod(target interface{}, action string) *Route {
 	return self
 }
 
-func (self *Route) WithAuthorization(authorize string) *Route {
+func (self *Route) WithFilter(filter filterFunc) *Route {
 
-	// validate?
-
-	self.Authorize = authorize
+	self.Filter.Add(filter)
 
 	return self
 }

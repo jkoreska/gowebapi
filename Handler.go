@@ -10,14 +10,15 @@ import (
 type Handler interface {
 	http.Handler
 	Router() Router
+	Filter() *Filter
 	AddFormatter(string, RequestFormatter, ResponseFormatter)
 	ClearFormatters()
 }
 
-type DefaultHandler struct {
+type defaultHandler struct {
 	router             Router
 	binder             Binder
-	auther             Auther
+	filter			   *Filter
 	requestFormatters  map[string]RequestFormatter
 	responseFormatters map[string]ResponseFormatter
 }
@@ -26,21 +27,26 @@ func NewDefaultHandler() Handler {
 
 	jsonFormatter := &JsonFormatter{}
 
-	return &DefaultHandler{
+	return &defaultHandler{
 		router:             &DefaultRouter{},
 		binder:             &DefaultBinder{},
-		auther:             &DefaultAuther{},
+		filter:				&Filter{make([]filterFunc, 0, 0)},
 		requestFormatters:  map[string]RequestFormatter{"application/json": jsonFormatter},
 		responseFormatters: map[string]ResponseFormatter{"application/json": jsonFormatter},
 	}
 }
 
-func (self *DefaultHandler) Router() Router {
+func (self *defaultHandler) Router() Router {
 
 	return self.router
 }
 
-func (self *DefaultHandler) AddFormatter(mimeType string, requestFormatter RequestFormatter, responseFormatter ResponseFormatter) {
+func (self *defaultHandler) Filter() *Filter {
+
+	return self.filter
+}
+
+func (self *defaultHandler) AddFormatter(mimeType string, requestFormatter RequestFormatter, responseFormatter ResponseFormatter) {
 
 	if nil != requestFormatter {
 		self.requestFormatters[mimeType] = requestFormatter
@@ -50,18 +56,18 @@ func (self *DefaultHandler) AddFormatter(mimeType string, requestFormatter Reque
 	}
 }
 
-func (self *DefaultHandler) ClearFormatters() {
+func (self *defaultHandler) ClearFormatters() {
 
 	self.requestFormatters = map[string]RequestFormatter{}
 	self.responseFormatters = map[string]ResponseFormatter{}
 }
 
-func (self *DefaultHandler) ServeHTTP(responseWriter http.ResponseWriter, httpRequest *http.Request) {
+func (self *defaultHandler) ServeHTTP(responseWriter http.ResponseWriter, httpRequest *http.Request) {
 
 	self.handleResponse(self.handleRequest(httpRequest), responseWriter)
 }
 
-func (self *DefaultHandler) handleRequest(httpRequest *http.Request) *Response {
+func (self *defaultHandler) handleRequest(httpRequest *http.Request) *Response {
 
 	responseFormat := self.determineResponseFormat(httpRequest.Header)
 
@@ -82,7 +88,7 @@ func (self *DefaultHandler) handleRequest(httpRequest *http.Request) *Response {
 		return &Response{
 			Status: 404,
 			Format: responseFormat,
-			Data:   routeError,
+			Data:   routeError.Error(),
 		}
 	}
 
@@ -90,10 +96,19 @@ func (self *DefaultHandler) handleRequest(httpRequest *http.Request) *Response {
 
 	// read URL query params into request.Data?
 
-	request.Body, _ = ioutil.ReadAll(httpRequest.Body)
-	// handle read err
+	requestBody, readErr := ioutil.ReadAll(httpRequest.Body)
 
-	if len(request.Body) > 0 {
+	if nil != readErr {
+		return &Response{
+			Status: 500,
+			Format: responseFormat,
+			Data:   readErr.Error(),
+		}
+	}
+
+	if len(requestBody) > 0 {
+
+		request.Body = requestBody
 
 		requestFormat := self.determineRequestFormat(httpRequest.Header)
 
@@ -106,15 +121,31 @@ func (self *DefaultHandler) handleRequest(httpRequest *http.Request) *Response {
 		}
 
 		requestFormatter := self.requestFormatters[requestFormat]
-		request.Data, _ = requestFormatter.FormatRequest(request.Body)
-		// handle format err
+		requestData, formatErr := requestFormatter.FormatRequest(request.Body)
+
+		if nil != formatErr {
+			return &Response{
+				Status: 500,
+				Format: responseFormat,
+				Data:   formatErr.Error(),
+			}
+		}
+
+		request.Data = requestData
 	}
 
-	if !self.auther.Authorize(request) {
-		return &Response{
-			Status: 403,
-			Format: responseFormat,
-			Data:   "Not authorized",
+	// run filters
+	filterResponses := make([]*Response, 0, 0)
+
+	for _, filter := range append(self.filter.All(), route.Filter.All()...) {
+
+		if response, next := filter(request); nil != response {
+
+			if (!next) {
+				return response
+			} else if (nil != response) {
+				filterResponses = append(filterResponses, response)
+			}
 		}
 	}
 
@@ -128,12 +159,24 @@ func (self *DefaultHandler) handleRequest(httpRequest *http.Request) *Response {
 		}
 	}
 
+	// add headers from filter responses
+	if nil == response.Header {
+		response.Header = make(map[string][]string, 0)
+	}
+	for _, filterResponse := range filterResponses {
+		for header, values := range filterResponse.Header {
+			for _, value := range values {
+				response.Header[header] = append(response.Header[header], value)
+			}
+		}
+	}
+
 	response.Format = responseFormat
 
 	return response
 }
 
-func (self *DefaultHandler) handleResponse(response *Response, responseWriter http.ResponseWriter) {
+func (self *defaultHandler) handleResponse(response *Response, responseWriter http.ResponseWriter) {
 
 	if "" == response.Format {
 
@@ -149,8 +192,15 @@ func (self *DefaultHandler) handleResponse(response *Response, responseWriter ht
 	}
 
 	responseFormatter := self.responseFormatters[response.Format]
-	response.Body, _ = responseFormatter.FormatResponse(response.Data)
-	// handle format err
+	responseBody, formatErr := responseFormatter.FormatResponse(response.Data)
+
+	if nil != formatErr {
+		responseWriter.WriteHeader(500)
+		io.WriteString(responseWriter, formatErr.Error())
+		return
+	}
+
+	response.Body = responseBody
 
 	for header, values := range response.Header {
 		for _, value := range values {
@@ -163,7 +213,7 @@ func (self *DefaultHandler) handleResponse(response *Response, responseWriter ht
 	responseWriter.Write(response.Body)
 }
 
-func (self *DefaultHandler) determineRequestFormat(header http.Header) string {
+func (self *defaultHandler) determineRequestFormat(header http.Header) string {
 
 	var mimeType string
 
@@ -180,17 +230,25 @@ func (self *DefaultHandler) determineRequestFormat(header http.Header) string {
 	return mimeType
 }
 
-func (self *DefaultHandler) determineResponseFormat(header http.Header) string {
+func (self *defaultHandler) determineResponseFormat(header http.Header) string {
 
 	var mimeType string
 
-	if accept := header.Get("accept"); "" != accept && "*/*" != accept {
+	if accept := header.Get("accept"); "" != accept {
+
 		accepts := strings.Split(accept, ",")
+
 		for _, accept = range accepts {
-			
 			accept = strings.Trim(accept, " ")
-			if _, exists := self.responseFormatters[accept]; exists {
-				mimeType = accept
+			parts := strings.Split(accept, ";")
+
+			if _, exists := self.responseFormatters[parts[0]]; exists {
+				mimeType = parts[0]
+			}
+			if "*/*" == parts[0] {
+				for mimeType, _ = range self.responseFormatters {
+					break // grab the first one
+				}
 			}
 		}
 	} else {

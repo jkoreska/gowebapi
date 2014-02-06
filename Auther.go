@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"github.com/jameskeane/bcrypt"
@@ -11,34 +12,75 @@ import (
 	"time"
 )
 
-var key = []byte{0x6c, 0xf8, 0x05, 0x1b, 0x4a, 0xae, 0xc0, 0xa9, 0x7f, 0x47, 0x94, 0x8d, 0x11, 0xdf, 0xe0, 0x0a}
-
 type Auther interface {
-	Authorize(request *Request) bool
-	GenerateToken(userdata string, expiryMinutes int64) string
-	AuthenticateToken(token string) string
+	Authenticate(request *Request) (*Response, bool)
+	Signin(userdata string) string
+	Salt() string
+	Hash(password string, salt string) string
 }
 
-type DefaultAuther struct{}
-
-func (self *DefaultAuther) Authorize(request *Request) bool {
-
-	if "" == request.Authorize {
-		return true
-	}
-
-	tokens, tokenExists := request.Http.Header["Authorize"]
-
-	if !tokenExists {
-		return false
-	}
-
-	request.UserData = self.AuthenticateToken(tokens[0])
-
-	return "" != request.UserData
+type defaultAuther struct{
+	key []byte
 }
 
-func (self *DefaultAuther) GenerateToken(userdata string, expiryMinutes int64) string {
+func NewDefaultAuther(key []byte) Auther {
+	return &defaultAuther{key}
+}
+
+func (self *defaultAuther) Authenticate(request *Request) (*Response, bool) {
+
+	authHeaders, authExists := request.Http.Header["Authorization"]
+
+	if authExists {
+
+		header := strings.Trim(authHeaders[0], " ")
+		parts := strings.Split(header, " ")
+
+		if 2 == len(parts) {
+
+			auth, decodeErr := base64.StdEncoding.DecodeString(parts[1])
+
+			if nil == decodeErr && "Basic" == parts[0] {
+
+				authParts := strings.Split(string(auth), ":")
+
+				userData := self.decodeTicket(authParts[0])
+
+				if "" != userData {
+					request.UserData = userData
+
+					return nil, true
+				}
+			}
+		}
+	}
+
+	return &Response{
+		Status: 401,
+		Header: map[string][]string{"Www-Authenticate":[]string{"Basic"}},
+	}, false
+}
+
+func (self *defaultAuther) Signin(userdata string) string {
+
+	return self.encodeTicket(userdata, 20160) // 2 weeks
+}
+
+func (self *defaultAuther) Salt() string {
+
+	salt, _ := bcrypt.Salt()
+
+	return salt
+}
+
+func (self *defaultAuther) Hash(password string, salt string) string {
+
+	hash, _ := bcrypt.Hash(password, salt)
+
+	return hash
+}
+
+func (self *defaultAuther) encodeTicket(userdata string, expiryMinutes int64) string {
 
 	// generate the token uuid|userdata|expiry
 
@@ -49,7 +91,7 @@ func (self *DefaultAuther) GenerateToken(userdata string, expiryMinutes int64) s
 
 	// encrypt the token
 
-	block, blockError := aes.NewCipher(key)
+	block, blockError := aes.NewCipher(self.key)
 
 	if nil != blockError {
 		return ""
@@ -58,13 +100,13 @@ func (self *DefaultAuther) GenerateToken(userdata string, expiryMinutes int64) s
 	bytes := []byte(token)
 	encrypted := make([]byte, len(bytes))
 
-	encrypter := cipher.NewCFBEncrypter(block, key[:aes.BlockSize])
+	encrypter := cipher.NewCFBEncrypter(block, self.key[:aes.BlockSize])
 	encrypter.XORKeyStream(encrypted, bytes)
 
 	return hex.EncodeToString(encrypted)
 }
 
-func (self *DefaultAuther) AuthenticateToken(token string) string {
+func (self *defaultAuther) decodeTicket(token string) string {
 
 	if "" != token {
 
@@ -76,7 +118,7 @@ func (self *DefaultAuther) AuthenticateToken(token string) string {
 			return ""
 		}
 
-		block, blockError := aes.NewCipher(key)
+		block, blockError := aes.NewCipher(self.key)
 
 		if nil != blockError {
 			return ""
@@ -84,7 +126,7 @@ func (self *DefaultAuther) AuthenticateToken(token string) string {
 
 		decrypted := make([]byte, len(bytes))
 
-		decrypter := cipher.NewCFBDecrypter(block, key[:aes.BlockSize])
+		decrypter := cipher.NewCFBDecrypter(block, self.key[:aes.BlockSize])
 		decrypter.XORKeyStream(decrypted, bytes)
 
 		// split the decrypted string into uuid|userdata|expiry
@@ -95,7 +137,8 @@ func (self *DefaultAuther) AuthenticateToken(token string) string {
 			return ""
 		}
 
-		// validate the expiry
+		// TODO: validate the expiry
+		// TODO: handle 0 (infinite) expiry
 
 		expiry, expiryError := time.Parse(time.RFC3339, parts[2])
 
@@ -116,21 +159,7 @@ func (self *DefaultAuther) AuthenticateToken(token string) string {
 	}
 }
 
-func (self *DefaultAuther) GenerateSalt() string {
-
-	salt, _ := bcrypt.Salt()
-
-	return salt
-}
-
-func (self *DefaultAuther) HashPassword(password string, salt string) string {
-
-	hash, _ := bcrypt.Hash(password, salt)
-
-	return hash
-}
-
-func (self *DefaultAuther) makeUUID() string {
+func (self *defaultAuther) makeUUID() string {
 	// http://stackoverflow.com/questions/15130321
 
 	bytes := make([]byte, 16)
