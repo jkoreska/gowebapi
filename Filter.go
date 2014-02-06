@@ -3,7 +3,7 @@ package gowebapi
 type filterFunc func(*Request) (*Response, bool)
 
 type Filter struct {
-	filters []filterFunc	
+	filters []filterFunc
 }
 
 func (self *Filter) Add(value filterFunc) {

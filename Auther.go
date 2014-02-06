@@ -19,7 +19,7 @@ type Auther interface {
 	Hash(password string, salt string) string
 }
 
-type defaultAuther struct{
+type defaultAuther struct {
 	key []byte
 }
 
@@ -57,7 +57,7 @@ func (self *defaultAuther) Authenticate(request *Request) (*Response, bool) {
 
 	return &Response{
 		Status: 401,
-		Header: map[string][]string{"Www-Authenticate":[]string{"Basic"}},
+		Header: map[string][]string{"Www-Authenticate": []string{"Basic"}},
 	}, false
 }
 

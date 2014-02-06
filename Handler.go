@@ -18,7 +18,7 @@ type Handler interface {
 type defaultHandler struct {
 	router             Router
 	binder             Binder
-	filter			   *Filter
+	filter             *Filter
 	requestFormatters  map[string]RequestFormatter
 	responseFormatters map[string]ResponseFormatter
 }
@@ -30,7 +30,7 @@ func NewDefaultHandler() Handler {
 	return &defaultHandler{
 		router:             &DefaultRouter{},
 		binder:             &DefaultBinder{},
-		filter:				&Filter{make([]filterFunc, 0, 0)},
+		filter:             &Filter{make([]filterFunc, 0, 0)},
 		requestFormatters:  map[string]RequestFormatter{"application/json": jsonFormatter},
 		responseFormatters: map[string]ResponseFormatter{"application/json": jsonFormatter},
 	}
@@ -141,9 +141,9 @@ func (self *defaultHandler) handleRequest(httpRequest *http.Request) *Response {
 
 		if response, next := filter(request); nil != response {
 
-			if (!next) {
+			if !next {
 				return response
-			} else if (nil != response) {
+			} else if nil != response {
 				filterResponses = append(filterResponses, response)
 			}
 		}

@@ -39,7 +39,7 @@ func (self *Route) ToFunc(target interface{}) *Route {
 		panic("Invalid target type (expecting func)")
 
 	} else if 1 != targetType.NumOut() || "*gowebapi.Response" != targetType.Out(0).String() {
-		
+
 		panic("Invalid target return value (expecting *gowebapi.Response)")
 	}
 
