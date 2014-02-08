@@ -14,7 +14,7 @@ import (
 
 type Auther interface {
 	Authenticate(request *Request) (*Response, bool)
-	Signin(userdata string) string
+	Signin(userdata string, expiryMinutes int64) string
 	Salt() string
 	Hash(password string, salt string) string
 }
@@ -40,7 +40,7 @@ func (self *defaultAuther) Authenticate(request *Request) (*Response, bool) {
 
 			auth, decodeErr := base64.StdEncoding.DecodeString(parts[1])
 
-			if nil == decodeErr && "Basic" == parts[0] {
+			if nil == decodeErr && "basic" == strings.ToLower(parts[0][:5]) {
 
 				authParts := strings.Split(string(auth), ":")
 
@@ -57,13 +57,13 @@ func (self *defaultAuther) Authenticate(request *Request) (*Response, bool) {
 
 	return &Response{
 		Status: 401,
-		Header: map[string][]string{"Www-Authenticate": []string{"Basic"}},
+		Header: map[string][]string{"Www-Authenticate": []string{"Basic/WebAPI"}},
 	}, false
 }
 
-func (self *defaultAuther) Signin(userdata string) string {
+func (self *defaultAuther) Signin(userdata string, expiryMinutes int64) string {
 
-	return self.encodeTicket(userdata, 20160) // 2 weeks
+	return self.encodeTicket(userdata, expiryMinutes)
 }
 
 func (self *defaultAuther) Salt() string {
@@ -84,7 +84,7 @@ func (self *defaultAuther) encodeTicket(userdata string, expiryMinutes int64) st
 
 	// generate the token uuid|userdata|expiry
 
-	uuid := self.makeUUID()
+	uuid := Uuid()
 	time := time.Now().Add(time.Duration(expiryMinutes) * time.Minute).Format(time.RFC3339)
 
 	token := fmt.Sprintf("%s|%s|%s", uuid, userdata, time)
@@ -159,7 +159,7 @@ func (self *defaultAuther) decodeTicket(token string) string {
 	}
 }
 
-func (self *defaultAuther) makeUUID() string {
+func Uuid() string {
 	// http://stackoverflow.com/questions/15130321
 
 	bytes := make([]byte, 16)

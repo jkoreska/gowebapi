@@ -82,18 +82,6 @@ func (self *defaultHandler) handleRequest(httpRequest *http.Request) *Response {
 		Http: httpRequest,
 	}
 
-	route, routeError := self.router.Route(request)
-
-	if nil != routeError {
-		return &Response{
-			Status: 404,
-			Format: responseFormat,
-			Data:   routeError.Error(),
-		}
-	}
-
-	request.Route = route
-
 	// read URL query params into request.Data?
 
 	requestBody, readErr := ioutil.ReadAll(httpRequest.Body)
@@ -134,10 +122,34 @@ func (self *defaultHandler) handleRequest(httpRequest *http.Request) *Response {
 		request.Data = requestData
 	}
 
-	// run filters
 	filterResponses := make([]*Response, 0, 0)
 
-	for _, filter := range append(self.filter.All(), route.Filter.All()...) {
+	// run global filters before routing
+	for _, filter := range self.filter.All() {
+
+		if response, next := filter(request); nil != response {
+
+			if !next {
+				return response
+			} else if nil != response {
+				filterResponses = append(filterResponses, response)
+			}
+		}
+	}
+
+	route, routeError := self.router.Route(request)
+	request.Route = route
+
+	if nil != routeError {
+		return &Response{
+			Status: 404,
+			Format: responseFormat,
+			Data:   routeError.Error(),
+		}
+	}
+
+	// run route filters before binding response
+	for _, filter := range route.Filter.All() {
 
 		if response, next := filter(request); nil != response {
 
@@ -218,8 +230,9 @@ func (self *defaultHandler) determineRequestFormat(header http.Header) string {
 	var mimeType string
 
 	if contentType := header.Get("content-type"); "" != contentType {
-		if _, exists := self.requestFormatters[contentType]; exists {
-			mimeType = contentType
+		parts := strings.Split(contentType, ";")
+		if _, exists := self.requestFormatters[parts[0]]; exists {
+			mimeType = parts[0]
 		}
 	} else {
 		for mimeType, _ = range self.requestFormatters {

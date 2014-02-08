@@ -15,7 +15,7 @@ func main() {
 	handler := gowebapi.NewDefaultHandler()
 
 	handler.Filter().
-		Add(CorsFilter)
+		Add(gowebapi.CorsFilter)
 
 	handler.Router().
 		AddRoute("/auth/").
@@ -36,16 +36,4 @@ func main() {
 	fmt.Println("We're a GO!")
 
 	http.ListenAndServe(":8888", handler)
-}
-
-func CorsFilter(request *gowebapi.Request) (*gowebapi.Response, bool) {
-
-	response := &gowebapi.Response{
-		Status: 200,
-		Header: map[string][]string{"Access-Control-Allow-Origin": []string{"*"}},
-	}
-
-	next := "OPTIONS" != request.Http.Method
-
-	return response, next
 }
