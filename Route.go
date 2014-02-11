@@ -62,7 +62,7 @@ func (self *Route) ToMethod(target interface{}, action string) *Route {
 
 	if !methodExists {
 
-		panic("Invalid target method (method doesn't exist)")
+		panic("Invalid target method (method " + action + " doesn't exist)")
 	}
 
 	if 1 != method.Type.NumOut() ||

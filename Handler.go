@@ -165,7 +165,7 @@ func (self *defaultHandler) handleRequest(httpRequest *http.Request) *Response {
 
 	if nil != bindError {
 		return &Response{
-			Status: 500,
+			Status: 400,
 			Format: responseFormat,
 			Data:   bindError.Error(),
 		}
