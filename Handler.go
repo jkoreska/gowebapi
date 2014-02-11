@@ -183,7 +183,9 @@ func (self *defaultHandler) handleRequest(httpRequest *http.Request) *Response {
 		}
 	}
 
-	response.Format = responseFormat
+	if "" == response.Format {
+		response.Format = responseFormat
+	}
 
 	return response
 }
@@ -204,6 +206,13 @@ func (self *defaultHandler) handleResponse(response *Response, responseWriter ht
 	}
 
 	responseFormatter := self.responseFormatters[response.Format]
+
+	if nil == responseFormatter {
+		responseWriter.WriteHeader(500)
+		io.WriteString(responseWriter, "No response formatters available for specified response.Format")
+		return
+	}
+
 	responseBody, formatErr := responseFormatter.FormatResponse(response.Data)
 
 	if nil != formatErr {
@@ -257,6 +266,7 @@ func (self *defaultHandler) determineResponseFormat(header http.Header) string {
 
 			if _, exists := self.responseFormatters[parts[0]]; exists {
 				mimeType = parts[0]
+				break
 			}
 			if "*/*" == parts[0] {
 				for mimeType, _ = range self.responseFormatters {

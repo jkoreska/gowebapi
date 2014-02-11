@@ -1,6 +1,7 @@
 package gowebapi
 
 import (
+	"fmt"
 	"encoding/json"
 )
 
@@ -45,4 +46,34 @@ func (self *JsonFormatter) FormatResponse(obj interface{}) ([]byte, error) {
 	}
 
 	return body, nil
+}
+
+type TextFormatter struct{}
+
+func (self *TextFormatter) MimeType() string {
+
+	return "text/plain"
+}
+
+func (self *TextFormatter) FormatRequest(body []byte) (map[string]interface{}, error) {
+
+	var obj map[string]interface{}
+
+	obj["body"] = string(body)
+
+	return obj, nil
+}
+
+func (self *TextFormatter) FormatResponse(obj interface{}) ([]byte, error) {
+
+	switch obj.(type) {
+		default:
+			return nil, fmt.Errorf("Invalid response.Data type %T", obj)
+		case string:
+			return []byte(obj.(string)), nil
+		case []byte:
+			return obj.([]byte), nil
+		case nil:
+			return []byte(""), nil
+	}
 }

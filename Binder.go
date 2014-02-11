@@ -130,7 +130,7 @@ func (self *DefaultBinder) bindParam(argType reflect.Type, paramValue string) (r
 		param.Set(reflect.ValueOf(paramValue))
 	}
 
-	return param, nil // TODO: return error
+	return param, nil
 }
 
 func (self *DefaultBinder) bindStruct(structType reflect.Type, data map[string]interface{}) (reflect.Value, error) {
