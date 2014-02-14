@@ -2,6 +2,7 @@ package gowebapi
 
 import (
 	"fmt"
+	"io/ioutil"
 	"encoding/json"
 )
 
@@ -11,12 +12,12 @@ type Formatter interface {
 
 type RequestFormatter interface {
 	Formatter
-	FormatRequest([]byte) (map[string]interface{}, error)
+	FormatRequest(*Request) error
 }
 
 type ResponseFormatter interface {
 	Formatter
-	FormatResponse(interface{}) ([]byte, error)
+	FormatResponse(*Response) error
 }
 
 type JsonFormatter struct{}
@@ -26,26 +27,36 @@ func (self *JsonFormatter) MimeType() string {
 	return "application/json"
 }
 
-func (self *JsonFormatter) FormatRequest(body []byte) (map[string]interface{}, error) {
+func (self *JsonFormatter) FormatRequest(request *Request) error {
 
-	var obj map[string]interface{}
+	requestBody, readErr := ioutil.ReadAll(request.Http.Body)
 
-	if err := json.Unmarshal(body, &obj); nil != err {
-		return nil, err
+	if nil != readErr {
+		return readErr
 	}
 
-	return obj, nil
+	request.Body = requestBody
+
+	unmarshalErr := json.Unmarshal(request.Body, &request.Data);
+
+	if nil != unmarshalErr {
+		return unmarshalErr
+	}
+
+	return nil
 }
 
-func (self *JsonFormatter) FormatResponse(obj interface{}) ([]byte, error) {
+func (self *JsonFormatter) FormatResponse(response *Response) error {
 
-	body, err := json.Marshal(obj)
+	body, marshalErr := json.Marshal(response.Data)
 
-	if nil != err {
-		return nil, err
+	if nil != marshalErr {
+		return marshalErr
 	}
 
-	return body, nil
+	response.Body = body
+
+	return nil
 }
 
 type TextFormatter struct{}
@@ -55,25 +66,40 @@ func (self *TextFormatter) MimeType() string {
 	return "text/plain"
 }
 
-func (self *TextFormatter) FormatRequest(body []byte) (map[string]interface{}, error) {
+func (self *TextFormatter) FormatRequest(request *Request) error {
 
-	var obj map[string]interface{}
-
-	obj["body"] = string(body)
-
-	return obj, nil
+	return nil
 }
 
-func (self *TextFormatter) FormatResponse(obj interface{}) ([]byte, error) {
+func (self *TextFormatter) FormatResponse(response *Response) error {
 
-	switch obj.(type) {
+	switch response.Data.(type) {
 		default:
-			return nil, fmt.Errorf("Invalid response.Data type %T", obj)
+			return fmt.Errorf("Invalid response.Data type %T", response.Data)
 		case string:
-			return []byte(obj.(string)), nil
+			response.Body = []byte(response.Data.(string))
 		case []byte:
-			return obj.([]byte), nil
+			response.Body = response.Data.([]byte)
 		case nil:
-			return []byte(""), nil
+			response.Body = *new([]byte)
 	}
+
+	return nil
+}
+
+type NullFormatter struct{}
+
+func (self *NullFormatter) MimeType() string {
+
+	return "*/*"
+}
+
+func (self *NullFormatter) FormatRequest(request *Request) error {
+
+	return nil
+}
+
+func (self *NullFormatter) FormatResponse(response *Response) error {
+
+	return nil
 }

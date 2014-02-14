@@ -2,7 +2,6 @@ package gowebapi
 
 import (
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 )
@@ -12,6 +11,8 @@ type Handler interface {
 	Router() Router
 	Filter() *Filter
 	AddFormatter(string, RequestFormatter, ResponseFormatter)
+	AddRequestFormatter(string, RequestFormatter)
+	AddResponseFormatter(string, ResponseFormatter)
 	ClearFormatters()
 }
 
@@ -48,9 +49,19 @@ func (self *defaultHandler) Filter() *Filter {
 
 func (self *defaultHandler) AddFormatter(mimeType string, requestFormatter RequestFormatter, responseFormatter ResponseFormatter) {
 
+	self.AddRequestFormatter(mimeType, requestFormatter)
+	self.AddResponseFormatter(mimeType, responseFormatter)
+}
+
+func (self *defaultHandler) AddRequestFormatter(mimeType string, requestFormatter RequestFormatter) {
+
 	if nil != requestFormatter {
 		self.requestFormatters[mimeType] = requestFormatter
 	}
+}
+
+func (self *defaultHandler) AddResponseFormatter(mimeType string, responseFormatter ResponseFormatter) {
+
 	if nil != responseFormatter {
 		self.responseFormatters[mimeType] = responseFormatter
 	}
@@ -82,21 +93,7 @@ func (self *defaultHandler) handleRequest(httpRequest *http.Request) *Response {
 		Http: httpRequest,
 	}
 
-	// read URL query params into request.Data?
-
-	requestBody, readErr := ioutil.ReadAll(httpRequest.Body)
-
-	if nil != readErr {
-		return &Response{
-			Status: 500,
-			Format: responseFormat,
-			Data:   readErr.Error(),
-		}
-	}
-
-	if len(requestBody) > 0 {
-
-		request.Body = requestBody
+	if httpRequest.ContentLength > 0 {
 
 		requestFormat := self.determineRequestFormat(httpRequest.Header)
 
@@ -109,7 +106,7 @@ func (self *defaultHandler) handleRequest(httpRequest *http.Request) *Response {
 		}
 
 		requestFormatter := self.requestFormatters[requestFormat]
-		requestData, formatErr := requestFormatter.FormatRequest(request.Body)
+		formatErr := requestFormatter.FormatRequest(request)
 
 		if nil != formatErr {
 			return &Response{
@@ -118,8 +115,6 @@ func (self *defaultHandler) handleRequest(httpRequest *http.Request) *Response {
 				Data:   formatErr.Error(),
 			}
 		}
-
-		request.Data = requestData
 	}
 
 	filterResponses := make([]*Response, 0, 0)
@@ -213,15 +208,13 @@ func (self *defaultHandler) handleResponse(response *Response, responseWriter ht
 		return
 	}
 
-	responseBody, formatErr := responseFormatter.FormatResponse(response.Data)
+	formatErr := responseFormatter.FormatResponse(response)
 
 	if nil != formatErr {
 		responseWriter.WriteHeader(500)
 		io.WriteString(responseWriter, formatErr.Error())
 		return
 	}
-
-	response.Body = responseBody
 
 	for header, values := range response.Header {
 		for _, value := range values {
