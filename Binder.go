@@ -151,23 +151,26 @@ func (self *DefaultBinder) bindStruct(structType reflect.Type, data map[string]i
 
 		if nil != data[fieldName] {
 
+			dataType := reflect.TypeOf(data[fieldName])
+
 			// TODO: type conversions
 
-			// encoding/json encodes numbers>interface{} as float64
-			if reflect.Int64 == fieldType.Kind() &&
-			   reflect.Float64 == reflect.TypeOf(data[fieldName]).Kind() {
+			// HACK: encoding/json encodes numbers>interface{} as float64
+			if reflect.Int64 == fieldType.Kind() && reflect.Float64 == dataType.Kind() {
 			   	data[fieldName] = int64(data[fieldName].(float64))
+			   	dataType = fieldType
 			}
 
 			// TODO: validation goes here
 
 			// struct field recursion
-			if reflect.Map == reflect.TypeOf(data[fieldName]).Kind() {
+			if reflect.Map == dataType.Kind() {
 				fieldValue, _ := self.bindStruct(fieldType, data[fieldName].(map[string]interface{}))
 				field.Set(fieldValue)
-			}
-
-			if fieldType.Kind() == reflect.TypeOf(data[fieldName]).Kind() {
+			} else if reflect.Array == dataType.Kind() || reflect.Slice == dataType.Kind() {
+				// iterate and recursive bindStruct?
+				field.Set(reflect.ValueOf(data[fieldName]))
+			} else if fieldType == dataType {
 				field.Set(reflect.ValueOf(data[fieldName]))
 			}
 		}
