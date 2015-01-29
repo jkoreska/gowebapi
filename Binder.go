@@ -4,6 +4,8 @@ import (
 	"errors"
 	"reflect"
 	"strconv"
+	"strings"
+	"encoding/json"
 )
 
 type Binder interface {
@@ -85,7 +87,7 @@ func (self *DefaultBinder) bindArgs(targetType reflect.Type, request *Request) (
 				arg, err = self.bindStruct(argType, request.Data)
 
 				if nil != err {
-					break
+					continue
 				}
 
 				args = append(args, arg)
@@ -100,7 +102,7 @@ func (self *DefaultBinder) bindArgs(targetType reflect.Type, request *Request) (
 				arg, err = self.bindParam(argType, paramValue)
 
 				if nil != err {
-					break
+					continue
 				}
 
 				args = append(args, arg)
@@ -120,14 +122,17 @@ func (self *DefaultBinder) bindParam(argType reflect.Type, paramValue string) (r
 	param := reflect.New(argType).Elem()
 
 	switch argType.Kind() {
-	case reflect.Int64:
-		value, _ := strconv.ParseInt(paramValue, 10, 0)
-		param.Set(reflect.ValueOf(value))
-	case reflect.Float64:
-		value, _ := strconv.ParseFloat(paramValue, 0)
-		param.Set(reflect.ValueOf(value))
-	default:
-		param.Set(reflect.ValueOf(paramValue))
+		case reflect.Bool:
+			value, _ := strconv.ParseBool(paramValue)
+			param.Set(reflect.ValueOf(value))
+		case reflect.Int64:
+			value, _ := strconv.ParseInt(paramValue, 10, 0)
+			param.Set(reflect.ValueOf(value))
+		case reflect.Float64:
+			value, _ := strconv.ParseFloat(paramValue, 0)
+			param.Set(reflect.ValueOf(value))
+		default:
+			param.Set(reflect.ValueOf(paramValue))
 	}
 
 	return param, nil
@@ -144,37 +149,68 @@ func (self *DefaultBinder) bindStruct(structType reflect.Type, data map[string]i
 	for fieldNum := 0; fieldNum < arg.Elem().NumField(); fieldNum++ {
 
 		field := arg.Elem().Field(fieldNum)
-		fieldName := structType.Field(fieldNum).Name
-		fieldType := structType.Field(fieldNum).Type
+		structField := structType.Field(fieldNum)
 
-		// TODO: case-insensitive matching
+		fieldName := structField.Name
+		// use json tag field name if defined
+		if ("" != structField.Tag.Get("json")) {
+			fieldName = strings.Split(structField.Tag.Get("json"), ",")[0]
+		}
 
 		if nil != data[fieldName] {
-
-			dataType := reflect.TypeOf(data[fieldName])
-
-			// TODO: type conversions
-
-			// HACK: encoding/json encodes numbers>interface{} as float64
-			if reflect.Int64 == fieldType.Kind() && reflect.Float64 == dataType.Kind() {
-			   	data[fieldName] = int64(data[fieldName].(float64))
-			   	dataType = fieldType
-			}
-
-			// TODO: validation goes here
-
-			// struct field recursion
-			if reflect.Map == dataType.Kind() {
-				fieldValue, _ := self.bindStruct(fieldType, data[fieldName].(map[string]interface{}))
-				field.Set(fieldValue)
-			} else if reflect.Array == dataType.Kind() || reflect.Slice == dataType.Kind() {
-				// iterate and recursive bindStruct?
-				field.Set(reflect.ValueOf(data[fieldName]))
-			} else if fieldType == dataType {
-				field.Set(reflect.ValueOf(data[fieldName]))
-			}
+			field.Set(self.bindField(structField.Type, data[fieldName]))
 		}
 	}
 
 	return arg, nil
+}
+
+func (self *DefaultBinder) bindField(fieldType reflect.Type, data interface{}) (reflect.Value) {
+
+	dataType := reflect.TypeOf(data)
+
+	// TODO: validation goes here
+
+	if reflect.Map == dataType.Kind() {
+
+		fieldValue, _ := self.bindStruct(fieldType, data.(map[string]interface{}))
+
+		return fieldValue
+	
+	} else if reflect.Array == dataType.Kind() || reflect.Slice == dataType.Kind() {
+	
+		arrayType := fieldType.Elem()
+		fieldArray := reflect.MakeSlice(fieldType, 0, 10)
+
+		for _, element := range data.([]interface{}) {
+
+			fieldValue := self.bindField(arrayType, element)
+			fieldArray = reflect.Append(fieldArray, fieldValue)
+		}
+
+		return fieldArray
+	
+	} else if reflect.PtrTo(fieldType).Implements(reflect.TypeOf((*json.Unmarshaler)(nil)).Elem()) {
+
+		fieldValue := reflect.New(fieldType)
+		fieldValue.
+			MethodByName("UnmarshalJSON").
+			Call(
+				[]reflect.Value{
+					reflect.ValueOf( []byte("\"" + data.(string) + "\"") ),
+				},
+			)
+
+		return fieldValue.Elem()
+
+	} else if dataType.AssignableTo(fieldType) {
+	
+		return reflect.ValueOf(data)
+
+	} else if dataType.ConvertibleTo(fieldType) {
+	
+		return reflect.ValueOf(data).Convert(fieldType)
+	}
+
+	return reflect.New(fieldType)
 }

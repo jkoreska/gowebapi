@@ -6,8 +6,11 @@ type Filter struct {
 	filters []filterFunc
 }
 
-func (self *Filter) Add(value filterFunc) {
+func (self *Filter) Add(value filterFunc) *Filter {
+
 	self.filters = append(self.filters, value)
+	
+	return self
 }
 
 func (self *Filter) All() []filterFunc {
