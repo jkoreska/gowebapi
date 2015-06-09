@@ -1,6 +1,10 @@
 package gowebapi
 
-type filterFunc func(*Request) (*Response, bool)
+import (
+	"log"
+)
+
+type filterFunc func(*Request, *Response) (*Response)
 
 type Filter struct {
 	filters []filterFunc
@@ -17,18 +21,42 @@ func (self *Filter) All() []filterFunc {
 	return self.filters
 }
 
-func CorsFilter(request *Request) (*Response, bool) {
+func LogFilter(request *Request, response *Response) (*Response) {
 
-	response := &Response{
-		Status: 204,
-		Header: map[string][]string{
-			"Access-Control-Allow-Origin": []string{"*"},
-			"Access-Control-Allow-Headers": []string{"Accept,Authorization,Origin,Content-type,X-Requested-With"},
-			"Access-Control-Allow-Methods": []string{"GET,POST,PUT,DELETE,OPTIONS"},
-		},
+	if nil != response {
+		
+		log.Printf(
+			"%s %s %s %d %d", 
+			request.Http.RemoteAddr, 
+			request.Http.Method, 
+			request.Http.URL.Path, 
+			response.Status, 
+			len(response.Body),
+			)
 	}
 
-	next := "OPTIONS" != request.Http.Method
+	return nil
+}
 
-	return response, next
+func CorsFilter(request *Request, response *Response) (*Response) {
+
+	if nil == response {
+		response = &Response{
+			Status: 204,
+		}		
+	}
+
+	if nil == response.Header {
+		response.Header = make(map[string][]string, 0)
+	}
+
+	response.Header["Access-Control-Allow-Origin"] = []string{"*"}
+	response.Header["Access-Control-Allow-Headers"] = []string{"Accept,Authorization,Origin,Content-type,X-Requested-With"}
+	response.Header["Access-Control-Allow-Methods"] = []string{"GET,POST,PUT,DELETE,OPTIONS"}
+
+	if "OPTIONS" == request.Http.Method {
+		return response
+	}
+
+	return nil
 }

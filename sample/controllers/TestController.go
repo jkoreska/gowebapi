@@ -35,7 +35,7 @@ func (self *testController) Authenticate(model *AuthModel, request *gowebapi.Req
 
 	if "test@test.com" == model.Email && "123123" == model.Secret {
 
-		token := self.auther.Signin("test@test.com")
+		token := self.auther.Signin("test@test.com", 10)
 
 		return &gowebapi.Response{
 			Status: 200,

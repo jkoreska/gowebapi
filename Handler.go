@@ -1,7 +1,6 @@
 package gowebapi
 
 import (
-	"io"
 	"net/http"
 	"strings"
 )
@@ -80,6 +79,10 @@ func (self *defaultHandler) ServeHTTP(responseWriter http.ResponseWriter, httpRe
 
 func (self *defaultHandler) handleRequest(httpRequest *http.Request) *Response {
 
+	request := &Request{
+		Http: httpRequest,
+	}
+
 	responseFormat := self.determineResponseFormat(httpRequest.Header)
 
 	if "" == responseFormat {
@@ -87,10 +90,6 @@ func (self *defaultHandler) handleRequest(httpRequest *http.Request) *Response {
 			Status: 406,
 			Data:   "Response format not supported",
 		}
-	}
-
-	request := &Request{
-		Http: httpRequest,
 	}
 
 	if httpRequest.ContentLength > 0 {
@@ -117,21 +116,6 @@ func (self *defaultHandler) handleRequest(httpRequest *http.Request) *Response {
 		}
 	}
 
-	filterResponses := make([]*Response, 0, 0)
-
-	// run global filters before routing
-	for _, filter := range self.filter.All() {
-
-		if response, next := filter(request); nil != response {
-
-			if !next {
-				return response
-			} else if nil != response {
-				filterResponses = append(filterResponses, response)
-			}
-		}
-	}
-
 	route, routeError := self.router.Route(request)
 	request.Route = route
 
@@ -143,16 +127,9 @@ func (self *defaultHandler) handleRequest(httpRequest *http.Request) *Response {
 		}
 	}
 
-	// run route filters before binding response
-	for _, filter := range route.Filter.All() {
-
-		if response, next := filter(request); nil != response {
-
-			if !next {
-				return response
-			} else if nil != response {
-				filterResponses = append(filterResponses, response)
-			}
+	for _, filter := range append(self.filter.All(), route.Filter.All()...) {
+		if responseOverride := filter(request, nil); nil != responseOverride {
+			return responseOverride
 		}
 	}
 
@@ -166,55 +143,38 @@ func (self *defaultHandler) handleRequest(httpRequest *http.Request) *Response {
 		}
 	}
 
-	// add headers from filter responses
-	if nil == response.Header {
-		response.Header = make(map[string][]string, 0)
+	if "" == response.Format {
+		response.Format = responseFormat
 	}
-	for _, filterResponse := range filterResponses {
-		for header, values := range filterResponse.Header {
-			for _, value := range values {
-				response.Header[header] = append(response.Header[header], value)
-			}
+
+	responseFormatter := self.responseFormatters[response.Format]
+
+	if nil == responseFormatter {
+		return &Response{
+			Status: 500,
+			Data: "No response formatters available for specified response.Format",
 		}
 	}
 
-	if "" == response.Format {
-		response.Format = responseFormat
+	formatErr := responseFormatter.FormatResponse(response)
+
+	if nil != formatErr {
+		return &Response{
+			Status: 500,
+			Data: formatErr.Error(),
+		}
+	}
+
+	for _, filter := range append(self.filter.All(), route.Filter.All()...) {
+		if responseOverride := filter(request, response); nil != responseOverride {
+			return responseOverride
+		}
 	}
 
 	return response
 }
 
 func (self *defaultHandler) handleResponse(response *Response, responseWriter http.ResponseWriter) {
-
-	if "" == response.Format {
-
-		for response.Format, _ = range self.responseFormatters {
-			break // grab the first one
-		}
-
-		if "" == response.Format {
-			responseWriter.WriteHeader(500)
-			io.WriteString(responseWriter, "No response formatters available")
-			return
-		}
-	}
-
-	responseFormatter := self.responseFormatters[response.Format]
-
-	if nil == responseFormatter {
-		responseWriter.WriteHeader(500)
-		io.WriteString(responseWriter, "No response formatters available for specified response.Format")
-		return
-	}
-
-	formatErr := responseFormatter.FormatResponse(response)
-
-	if nil != formatErr {
-		responseWriter.WriteHeader(500)
-		io.WriteString(responseWriter, formatErr.Error())
-		return
-	}
 
 	for header, values := range response.Header {
 		for _, value := range values {

@@ -15,7 +15,8 @@ func main() {
 	handler := gowebapi.NewDefaultHandler()
 
 	handler.Filter().
-		Add(gowebapi.CorsFilter)
+		Add(gowebapi.CorsFilter).
+		Add(gowebapi.LogFilter)
 
 	handler.Router().
 		AddRoute("/auth/").

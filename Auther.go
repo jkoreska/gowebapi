@@ -13,7 +13,7 @@ import (
 )
 
 type Auther interface {
-	Authenticate(request *Request) (*Response, bool)
+	Authenticate(request *Request, response *Response) (*Response)
 	Signin(userdata string, expiryMinutes int64) string
 	Hash(password string) string
 	Match(password string, hash string) bool
@@ -27,7 +27,11 @@ func NewDefaultAuther(key []byte) Auther {
 	return &defaultAuther{key}
 }
 
-func (self *defaultAuther) Authenticate(request *Request) (*Response, bool) {
+func (self *defaultAuther) Authenticate(request *Request, response *Response) (*Response) {
+
+	if nil != response {
+		return nil
+	}
 
 	authHeaders, authExists := request.Http.Header["Authorization"]
 
@@ -49,7 +53,7 @@ func (self *defaultAuther) Authenticate(request *Request) (*Response, bool) {
 				if "" != userData {
 					request.UserData = userData
 
-					return nil, true
+					return nil
 				}
 			}
 		}
@@ -58,7 +62,7 @@ func (self *defaultAuther) Authenticate(request *Request) (*Response, bool) {
 	return &Response{
 		Status: 401,
 		Header: map[string][]string{"Www-Authenticate": []string{"Basic/WebAPI"}},
-	}, false
+	}
 }
 
 func (self *defaultAuther) Signin(userdata string, expiryMinutes int64) string {
