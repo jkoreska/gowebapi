@@ -15,8 +15,8 @@ import (
 type Auther interface {
 	Authenticate(request *Request) (*Response, bool)
 	Signin(userdata string, expiryMinutes int64) string
-	Salt() string
-	Hash(password string, salt string) string
+	Hash(password string) string
+	Match(password string, hash string) bool
 }
 
 type defaultAuther struct {
@@ -66,18 +66,16 @@ func (self *defaultAuther) Signin(userdata string, expiryMinutes int64) string {
 	return self.encodeTicket(userdata, expiryMinutes)
 }
 
-func (self *defaultAuther) Salt() string {
+func (self *defaultAuther) Hash(password string) string {
 
-	salt, _ := bcrypt.Salt()
-
-	return salt
-}
-
-func (self *defaultAuther) Hash(password string, salt string) string {
-
-	hash, _ := bcrypt.Hash(password, salt)
+	hash, _ := bcrypt.Hash(password)
 
 	return hash
+}
+
+func (self *defaultAuther) Match(password string, hash string) bool {
+
+	return bcrypt.Match(password, hash)
 }
 
 func (self *defaultAuther) encodeTicket(userdata string, expiryMinutes int64) string {
