@@ -13,7 +13,7 @@ type Filter struct {
 func (self *Filter) Add(value filterFunc) *Filter {
 
 	self.filters = append(self.filters, value)
-	
+
 	return self
 }
 
@@ -24,13 +24,13 @@ func (self *Filter) All() []filterFunc {
 func LogFilter(request *Request, response *Response) (*Response) {
 
 	if nil != response {
-		
+
 		log.Printf(
-			"%s %s %s %d %d", 
-			request.Http.RemoteAddr, 
-			request.Http.Method, 
-			request.Http.URL.Path, 
-			response.Status, 
+			"%s %s %s %d %d",
+			request.Http.RemoteAddr,
+			request.Http.Method,
+			request.Http.URL.Path,
+			response.Status,
 			len(response.Body),
 			)
 	}
@@ -41,11 +41,9 @@ func LogFilter(request *Request, response *Response) (*Response) {
 func CorsFilter(request *Request, response *Response) (*Response) {
 
 	if nil == response {
-		response = &Response{
-			Status: 204,
-		}		
+		response = &Response{}
 	}
-
+	
 	if nil == response.Header {
 		response.Header = make(map[string][]string, 0)
 	}
@@ -55,6 +53,7 @@ func CorsFilter(request *Request, response *Response) (*Response) {
 	response.Header["Access-Control-Allow-Methods"] = []string{"GET,POST,PUT,DELETE,OPTIONS"}
 
 	if "OPTIONS" == request.Http.Method {
+		response.Status = 204
 		return response
 	}
 

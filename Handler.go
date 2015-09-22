@@ -120,11 +120,17 @@ func (self *defaultHandler) handleRequest(httpRequest *http.Request) *Response {
 	request.Route = route
 
 	if nil != routeError {
-		return &Response{
+		response := &Response{
 			Status: 404,
 			Format: responseFormat,
 			Data:   routeError.Error(),
 		}
+		for _, filter := range self.filter.All() {
+			if responseOverride := filter(request, response); nil != responseOverride {
+				return responseOverride
+			}
+		}
+		return response
 	}
 
 	for _, filter := range append(self.filter.All(), route.Filter.All()...) {
